@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lern-Timer</title>
+  <style>
+    :root {
+      --bg: #0f1218;
+      --surface: #171b24;
+      --line: #252b38;
+      --text: #e6e9ef;
+      --muted: #8b93a5;
+      --accent: #f5a97f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 3rem 1rem;
+    }
+
+    main { width: 100%; max-width: 480px; }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .timer-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 0.85rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]:disabled { opacity: 0.5; }
+
+    #anzeige {
+      font-size: clamp(3.5rem, 18vw, 5rem);
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      margin: 1.75rem 0 0.5rem;
+    }
+
+    #status {
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-height: 1.3em;
+      margin-bottom: 1.5rem;
+    }
+
+    .progress {
+      height: 4px;
+      background: var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 1.75rem;
+    }
+
+    #balken {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.4s linear;
+    }
+
+    .buttons { display: flex; gap: 0.75rem; justify-content: center; }
+
+    button {
+      font: inherit;
+      font-size: 0.95rem;
+      padding: 0.75rem 1.6rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      transition: filter 0.15s, transform 0.15s, border-color 0.15s;
+    }
+
+    button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--muted); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0b1a16;
+      font-weight: 600;
+    }
+
+    button.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
+
+    .list-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.75rem;
+    }
+
+    h2 { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+    .link {
+      border: none;
+      padding: 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-radius: 0;
+    }
+
+    .link:hover:not(:disabled) { color: var(--accent); transform: none; }
+
+    ul { list-style: none; display: grid; gap: 0.5rem; }
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+    }
+
+    li .aufgabe { overflow-wrap: anywhere; }
+    li .zeit { color: var(--muted); font-size: 0.85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+    .leer { color: var(--muted); font-size: 0.9rem; padding: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Lern-Timer</h1>
+
+    <section class="timer-card">
+      <input id="aufgabe" type="text" maxlength="80" placeholder="Was ist dein Fokus?" autocomplete="off">
+      <div id="anzeige" aria-live="off">25:00</div>
+      <p id="status">Bereit für 25 Minuten Fokus.</p>
+      <div class="progress"><div id="balken"></div></div>
+      <div class="buttons">
+        <button id="start" class="primary" type="button">Start</button>
+        <button id="abbruch" type="button" disabled>Abbrechen</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="list-head">
+        <h2>Abgeschlossene Sitzungen</h2>
+        <button id="leeren" class="link" type="button">Liste leeren</button>
+      </div>
+      <ul id="liste"></ul>
+    </section>
+  </main>
+
+  <script>
+    const DAUER_SEKUNDEN = 25 * 60;
+    const SPEICHER_KEY = "lern-timer-sitzungen";
+
+    const feldAufgabe = document.getElementById("aufgabe");
+    const anzeige = document.getElementById("anzeige");
+    const statusText = document.getElementById("status");
+    const balken = document.getElementById("balken");
+    const btnStart = document.getElementById("start");
+    const btnAbbruch = document.getElementById("abbruch");
+    const btnLeeren = document.getElementById("leeren");
+    const liste = document.getElementById("liste");
+
+    let intervall = null;
+    let endzeit = 0;
+    let aktuelleAufgabe = "";
+
+    // ---------- Speicher (localStorage) ----------
+    function ladeSitzungen() {
+      try {
+        const daten = JSON.parse(localStorage.getItem(SPEICHER_KEY));
+        return Array.isArray(daten) ? daten : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function speichereSitzungen(sitzungen) {
+      try {
+        localStorage.setItem(SPEICHER_KEY, JSON.stringify(sitzungen));
+      } catch (e) { /* Speicher nicht verfügbar: Liste gilt nur bis zum Neuladen */ }
+    }
+
+    let sitzungen = ladeSitzungen();
+
+    // ---------- Anzeige ----------
+    function formatiere(sekunden) {
+      const m = String(Math.floor(sekunden / 60)).padStart(2, "0");
+      const s = String(sekunden % 60).padStart(2, "0");
+      return m + ":" + s;
+    }
+
+    function zeigeListe() {
+      liste.textContent = "";
+      btnLeeren.hidden = sitzungen.length === 0;
+
+      if (sitzungen.length === 0) {
+        const leer = document.createElement("p");
+        leer.className = "leer";
+        leer.textContent = "Noch keine Sitzungen. Deine erste landet hier.";
+        liste.appendChild(leer);
+        return;
+      }
+
+      // Neueste zuerst
+      [...sitzungen].reverse().forEach(eintrag => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "aufgabe";
+        name.textContent = eintrag.aufgabe;
+        const zeit = document.createElement("span");
+        zeit.className = "zeit";
+        zeit.textContent = eintrag.zeit;
+        li.append(name, zeit);
+        liste.appendChild(li);
+      });
+    }
+
+    function zeigeRestzeit(rest) {
+      anzeige.textContent = formatiere(rest);
+      document.title = rest > 0 && intervall ? formatiere(rest) + " · Lern-Timer" : "Lern-Timer";
+      const fortschritt = ((DAUER_SEKUNDEN - rest) / DAUER_SEKUNDEN) * 100;
+      balken.style.width = fortschritt + "%";
+    }
+
+    function zuruecksetzen(meldung) {
+      clearInterval(intervall);
+      intervall = null;
+      feldAufgabe.disabled = false;
+      btnStart.disabled = false;
+      btnAbbruch.disabled = true;
+      statusText.textContent = meldung;
+      zeigeRestzeit(DAUER_SEKUNDEN);
+      balken.style.width = "0%";
+      document.title = "Lern-Timer";
+    }
+
+    // ---------- Timer ----------
+    function tick() {
+      // Restzeit aus der Endzeit berechnen, damit der Timer auch bei gedrosseltem Tab genau bleibt
+      const rest = Math.max(0, Math.round((endzeit - Date.now()) / 1000));
+      zeigeRestzeit(rest);
+      if (rest === 0) beendeSitzung();
+    }
+
+    function beendeSitzung() {
+      const jetzt = new Date();
+      const zeit = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+        + ", " + jetzt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
+
+      sitzungen.push({ aufgabe: aktuelleAufgabe, zeit: zeit });
+      speichereSitzungen(sitzungen);
+      zeigeListe();
+      zuruecksetzen("Sitzung gespeichert. Zeit für eine kurze Pause.");
+    }
+
+    btnStart.addEventListener("click", () => {
+      const text = feldAufgabe.value.trim();
+      if (!text) {
+        statusText.textContent = "Bitte zuerst eintragen, woran du arbeitest.";
+        feldAufgabe.focus();
+        return;
+      }
+      aktuelleAufgabe = text;
+      endzeit = Date.now() + DAUER_SEKUNDEN * 1000;
+      feldAufgabe.disabled = true;
+      btnStart.disabled = true;
+      btnAbbruch.disabled = false;
+      statusText.textContent = "Fokus: " + aktuelleAufgabe;
+      intervall = setInterval(tick, 250);
+      tick();
+    });
+
+    btnAbbruch.addEventListener("click", () => {
+      zuruecksetzen("Abgebrochen. Diese Sitzung wurde nicht gespeichert.");
+    });
+
+    feldAufgabe.addEventListener("keydown", e => {
+      if (e.key === "Enter") btnStart.click();
+    });
+
+    btnLeeren.addEventListener("click", () => {
+      if (confirm("Alle gespeicherten Sitzungen löschen?")) {
+        sitzungen = [];
+        speichereSitzungen(sitzungen);
+        zeigeListe();
+      }
+    });
+
+    zeigeListe();
+  </script>
+</body>
+</html>
