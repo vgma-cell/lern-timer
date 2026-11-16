@@ -33,7 +33,14 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--muted);
-      margin-bottom: 2rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .wetter {
+      font-size: 0.85rem;
+      color: var(--muted);
+      min-height: 1.3em;
+      margin-bottom: 1.6rem;
     }
 
     .timer-card {
@@ -157,6 +164,7 @@
 <body>
   <main>
     <h1>Timer zum Lernen</h1>
+    <p id="wetter" class="wetter"></p>
 
     <section class="timer-card">
       <input id="aufgabe" type="text" maxlength="80" placeholder="Was ist dein Fokus?" autocomplete="off">
@@ -190,10 +198,65 @@
     const btnAbbruch = document.getElementById("abbruch");
     const btnLeeren = document.getElementById("leeren");
     const liste = document.getElementById("liste");
+    const wetterZeile = document.getElementById("wetter");
 
     let intervall = null;
     let endzeit = 0;
     let aktuelleAufgabe = "";
+
+    // ---------- Wetter (Open-Meteo) ----------
+    const WETTER_URL = "https://api.open-meteo.com/v1/forecast?latitude=50.73&longitude=7.10&current=temperature_2m,weather_code";
+
+    // Übersetzung der WMO-Wettercodes in kurze deutsche Texte
+    const WETTER_TEXTE = {
+      0: "klar",
+      1: "überwiegend klar",
+      2: "teils bewölkt",
+      3: "bewölkt",
+      45: "Nebel",
+      48: "Raureifnebel",
+      51: "leichter Nieselregen",
+      53: "Nieselregen",
+      55: "starker Nieselregen",
+      56: "gefrierender Nieselregen",
+      57: "starker gefrierender Nieselregen",
+      61: "leichter Regen",
+      63: "Regen",
+      65: "starker Regen",
+      66: "gefrierender Regen",
+      67: "starker gefrierender Regen",
+      71: "leichter Schneefall",
+      73: "Schneefall",
+      75: "starker Schneefall",
+      77: "Schneegriesel",
+      80: "leichte Regenschauer",
+      81: "Regenschauer",
+      82: "heftige Regenschauer",
+      85: "leichte Schneeschauer",
+      86: "starke Schneeschauer",
+      95: "Gewitter",
+      96: "Gewitter mit Hagel",
+      99: "starkes Gewitter mit Hagel"
+    };
+
+    async function ladeWetter() {
+      // Bei Fehler oder Zeitüberschreitung bleibt die Zeile einfach leer
+      const abbruch = new AbortController();
+      const timeout = setTimeout(() => abbruch.abort(), 8000);
+      try {
+        const antwort = await fetch(WETTER_URL, { signal: abbruch.signal });
+        if (!antwort.ok) return;
+        const daten = await antwort.json();
+        const temperatur = daten.current.temperature_2m;
+        const text = WETTER_TEXTE[daten.current.weather_code];
+        if (typeof temperatur !== "number") return;
+        wetterZeile.textContent = "Bonn: " + Math.round(temperatur) + " °C" + (text ? ", " + text : "");
+      } catch (e) {
+        /* kein Netz, API nicht erreichbar oder unerwartete Antwort: Zeile bleibt leer */
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
 
     // ---------- Speicher (localStorage) ----------
     function ladeSitzungen() {
@@ -318,6 +381,7 @@
     });
 
     zeigeListe();
+    ladeWetter();
   </script>
 </body>
 </html>
